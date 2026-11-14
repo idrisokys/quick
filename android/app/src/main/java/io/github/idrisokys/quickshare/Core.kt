@@ -1,4 +1,4 @@
-package io.qs
+package io.github.idrisokys.quickshare
 
 import android.content.Context
 import android.content.Intent
@@ -66,10 +66,8 @@ object Hold {
 /** Ağda bulunan cihazlar. */
 object Peers {
     private val m = LinkedHashMap<String, Peer>()
-    /** Cihaz listesi değişince (bulundu / kayboldu) arka plan servisini haberdar eder: bildirimi günceller. */
-    @Volatile var onChange: (() -> Unit)? = null
-    @Synchronized fun put(svc: String, p: Peer) { m[svc] = p; Bus.changed(); onChange?.invoke() }
-    @Synchronized fun del(svc: String) { m.remove(svc); Bus.changed(); onChange?.invoke() }
+    @Synchronized fun put(svc: String, p: Peer) { m[svc] = p; Bus.changed() }
+    @Synchronized fun del(svc: String) { m.remove(svc); Bus.changed() }
     @Synchronized fun list(): List<Peer> = m.values.distinctBy { it.id }
 }
 
@@ -100,9 +98,9 @@ object Shortcuts {
                 ShortcutInfo.Builder(c, it.id)
                     .setShortLabel(it.name.ifBlank { c.getString(R.string.device_default) }.take(25))
                     .setIcon(Icon.createWithResource(c, R.drawable.ic))
-                    .setCategories(setOf("io.qs.TARGET"))
+                    .setCategories(setOf("io.github.idrisokys.quickshare.TARGET"))
                     .setLongLived(true)
-                    .setIntent(Intent(c, ShareActivity::class.java).setAction("io.qs.SHORT"))
+                    .setIntent(Intent(c, ShareActivity::class.java).setAction("io.github.idrisokys.quickshare.SHORT"))
                     .build()
             }
         } catch (e: Exception) { }

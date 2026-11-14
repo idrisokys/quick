@@ -1,6 +1,6 @@
 name: QuickShare
 options:
-  bundleIdPrefix: io.qs
+  bundleIdPrefix: io.github.idrisokys
   deploymentTarget:
     macOS: "13.0"
 settings:
@@ -18,7 +18,7 @@ targets:
     sources: [QuickShare]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.qs.share.mac
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.idrisokys.quickshare
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: ShareExt
@@ -35,7 +35,7 @@ targets:
         NSBonjourServices:
           - _qshare._tcp
         CFBundleURLTypes:
-          - CFBundleURLName: io.qs.share.mac
+          - CFBundleURLName: io.github.idrisokys.quickshare
             CFBundleURLSchemes:
               - quickshare
         NSServices:
@@ -51,7 +51,7 @@ targets:
     sources: [ShareExt]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.qs.share.mac.ShareExt
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.idrisokys.quickshare.ShareExt
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     entitlements:
       path: ShareExt/ShareExt.entitlements

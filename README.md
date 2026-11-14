@@ -16,7 +16,6 @@ The apps use the device language: **Turkish** on Turkish devices, **English** ev
 - Every nearby device in the list can receive files directly: tap a device, pick files, done
 - Files from devices on your network are accepted automatically
 - Appears in the system Share menu
-- Android: the persistent notification lists online devices; tap a device button in it to pick files and send only to that device
 - Plain TCP on your local network: no encryption or handshake, so transfers stay fast and simple
 
 | Folder | Platform | Notes |

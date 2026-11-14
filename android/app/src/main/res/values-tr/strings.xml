@@ -29,6 +29,4 @@
     <string name="notif_recv_channel">Gelen dosyalar</string>
     <string name="notif_received">Dosya geldi</string>
     <string name="notif_stop">Durdur</string>
-    <string name="notif_online">Çevrimiçi: %1$s</string>
-    <string name="notif_more">Diğerleri (%1$d)</string>
 </resources>

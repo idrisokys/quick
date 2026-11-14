@@ -1,4 +1,4 @@
-package io.qs
+package io.github.idrisokys.quickshare
 
 import android.content.ClipData
 import android.content.Context
@@ -44,6 +44,7 @@ class Discovery(c: Context) {
     private var dl: NsdManager.DiscoveryListener? = null
     private val q = ArrayDeque<NsdServiceInfo>()
     private var busy = false
+    private val tries = HashMap<String, Int>()
     private val myName get() = "QS" + Identity.id.take(10)
 
     fun register(port: Int) {
@@ -87,12 +88,20 @@ class Discovery(c: Context) {
         val s = q.removeFirstOrNull() ?: return
         busy = true
         nsd.resolveService(s, object : NsdManager.ResolveListener {
-            override fun onResolveFailed(i: NsdServiceInfo?, e: Int) { done() }
+            override fun onResolveFailed(i: NsdServiceInfo?, e: Int) {
+                // NsdManager çözümlemesi sık sık geçici hata verir; cihaz listeden düşmesin diye 2 kez daha dene.
+                synchronized(this@Discovery) {
+                    val n = tries[s.serviceName] ?: 0
+                    if (n < 2) { tries[s.serviceName] = n + 1; q.addLast(s) }
+                }
+                done()
+            }
             override fun onServiceResolved(i: NsdServiceInfo) {
                 val f = i.attributes["i"]?.toString(Charsets.UTF_8)
                 val n = i.attributes["n"]?.toString(Charsets.UTF_8)
                 if (f != null && f != Identity.id && i.host != null)
                     { Peers.put(i.serviceName, Peer(f, n ?: "?", i.host, i.port)); Shortcuts.update(app) }
+                synchronized(this@Discovery) { tries.remove(s.serviceName) }
                 done()
             }
         })
@@ -169,7 +178,8 @@ class Receiver(private val ctx: Context) {
                 if (!d.isDirectory || d.usableSpace < len) { reply(s, "507 Insufficient Storage"); Bus.set(ctx.getString(R.string.recv_error)); return }
 
                 // Önce .part dosyasına yazılır, başarılı olunca asıl ada çevrilir (aynı adlı dosyanın üzerine yazar).
-                val file = File(d, "$clean.part")
+                // Aynı adlı iki aktarım birbirinin yarım dosyasını bozmasın diye .part adı benzersizdir.
+                val file = File(d, "$clean.${java.util.UUID.randomUUID().toString().take(8)}.part")
                 var ok = false
                 try {
                     FileOutputStream(file).use { out ->
@@ -261,33 +271,61 @@ object Sender {
             }
         }
         val afd = cr.openAssetFileDescriptor(u, "r") ?: error(c.getString(R.string.err_open))
-        val len = afd.length
-        if (len < 0) { afd.close(); throw IllegalArgumentException(c.getString(R.string.err_size)) }
-        afd.createInputStream().use { ins ->
-            // Tampon, connect'ten ÖNCE ayarlanmalı (TCP pencere ölçekleme)
-            val s = Socket().apply { sendBufferSize = BUF; tcpNoDelay = true; soTimeout = 30000 }
-            s.use {
-                s.connect(InetSocketAddress(p.host, p.port), 10000)
-                val out = s.outputStream
-                out.write(
-                    ("POST /u HTTP/1.1\r\nX-Name: ${URLEncoder.encode(name, "UTF-8")}\r\n" +
-                        "Content-Length: $len\r\nConnection: close\r\n\r\n").toByteArray()
-                )
-                val b = ByteArray(BUF)
-                var sent = 0L
-                var last = -1
-                while (true) {
-                    val n = ins.read(b)
-                    if (n < 0) break
-                    out.write(b, 0, n)
-                    sent += n
-                    val pc = if (len > 0) (sent * 100 / len).toInt() else 0
-                    if (pc != last) { last = pc; Bus.progress(c.getString(R.string.sending, name), pc) }
-                }
-                out.flush()
-                val l = BufferedReader(InputStreamReader(s.inputStream)).readLine()
-                require(l?.contains(" 200") == true) { c.getString(R.string.err_rejected) }
+        var len = afd.length
+        if (len < 0) {
+            // Bazı sağlayıcılar (bulut, bazı uygulamalar) uzunluğu AFD'de vermez; SIZE sütununa bak.
+            cr.query(u, arrayOf(OpenableColumns.SIZE), null, null, null)?.use {
+                if (it.moveToFirst() && !it.isNull(0)) len = it.getLong(0)
             }
+        }
+        var spool: File? = null
+        val src: InputStream
+        if (len < 0) {
+            // Boyut hiç bilinmiyorsa önce geçici dosyaya al, sonra boyutuyla gönder.
+            afd.close()
+            val t = File.createTempFile("tx", null, c.cacheDir).also { spool = it }
+            try {
+                (cr.openInputStream(u) ?: error(c.getString(R.string.err_open))).use { i -> t.outputStream().use { o -> i.copyTo(o, BUF) } }
+            } catch (e: Exception) { t.delete(); throw e }
+            len = t.length()
+            src = t.inputStream()
+        } else src = afd.createInputStream()
+        try {
+            transfer(c, p, name, len, src)
+        } finally {
+            try { src.close() } catch (e: Exception) { }
+            try { afd.close() } catch (e: Exception) { }
+            spool?.delete()
+        }
+    }
+
+    private fun transfer(c: Context, p: Peer, name: String, len: Long, ins: InputStream) {
+        // Tampon, connect'ten ÖNCE ayarlanmalı (TCP pencere ölçekleme)
+        val s = Socket().apply { sendBufferSize = BUF; tcpNoDelay = true; soTimeout = 30000 }
+        s.use {
+            s.connect(InetSocketAddress(p.host, p.port), 10000)
+            val out = s.outputStream
+            out.write(
+                ("POST /u HTTP/1.1\r\nX-Name: ${URLEncoder.encode(name, "UTF-8")}\r\n" +
+                    "Content-Length: $len\r\nConnection: close\r\n\r\n").toByteArray()
+            )
+            val b = ByteArray(BUF)
+            var sent = 0L
+            var last = -1
+            while (sent < len) {
+                // Dosya gönderim sırasında büyürse protokolü bozmamak için bildirilen uzunluğu aşma.
+                val n = ins.read(b, 0, minOf(b.size.toLong(), len - sent).toInt())
+                if (n < 0) break
+                out.write(b, 0, n)
+                sent += n
+                val pc = if (len > 0) (sent * 100 / len).toInt() else 0
+                if (pc != last) { last = pc; Bus.progress(c.getString(R.string.sending, name), pc) }
+            }
+            // Dosya kısaldıysa alıcıyı 30 sn bekletmek yerine hemen hata ver.
+            require(sent == len) { c.getString(R.string.err_open) }
+            out.flush()
+            val l = BufferedReader(InputStreamReader(s.inputStream)).readLine()
+            require(l?.contains(" 200") == true) { c.getString(R.string.err_rejected) }
         }
     }
 }

@@ -1,4 +1,4 @@
-package io.qs
+package io.github.idrisokys.quickshare
 
 import android.content.BroadcastReceiver
 import android.content.Context

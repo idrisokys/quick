@@ -12,7 +12,6 @@ Uygulamalar cihaz diline uyar: Türkçe cihazlarda **Türkçe**, diğer tüm cih
 - Listedeki her yakın cihaza doğrudan gönderilir: cihaza dokunun, dosyaları seçin, bitti
 - Ağınızdaki cihazlardan gelen dosyalar otomatik kabul edilir
 - Sistemin paylaş menüsünde görünür
-- Android: kalıcı bildirimde çevrimiçi cihazlar listelenir; bildirimdeki cihaz butonuna dokunup dosyaları seçin, yalnızca o cihaza gönderilir
 - Yerel ağda düz TCP: şifreleme ve el sıkışma yok, aktarım hızlı ve sade
 
 | Klasör | Platform | Not |

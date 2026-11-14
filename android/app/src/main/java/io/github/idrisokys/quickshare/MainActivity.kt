@@ -1,4 +1,4 @@
-package io.qs
+package io.github.idrisokys.quickshare
 
 import android.app.Activity
 import android.content.Intent

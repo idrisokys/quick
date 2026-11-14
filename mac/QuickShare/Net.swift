@@ -42,9 +42,37 @@ final class Net {
     }
 }
 
+/// Aktarım sürerken App Nap ve boşta uykuyu engeller. Dock'ta görünmeyen (LSUIElement) uygulamalar,
+/// pencere kapalıyken sistem tarafından kısılır; bu da alma/gönderme hızını düşürür.
+enum Activity {
+    private static let lock = NSLock()
+    private static var n = 0
+    private static var token: NSObjectProtocol?
+
+    static func begin() {
+        lock.lock(); defer { lock.unlock() }
+        n += 1
+        if n == 1 {
+            token = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled], reason: "QuickShare file transfer")
+        }
+    }
+
+    static func end() {
+        lock.lock(); defer { lock.unlock() }
+        guard n > 0 else { return }
+        n -= 1
+        if n == 0, let t = token { ProcessInfo.processInfo.endActivity(t); token = nil }
+    }
+}
+
 /// Gelen bağlantı: başlığı oku, dosyayı ~/Link içine yaz.
 final class Receiver {
     private let c: NWConnection
+    /// Her bağlantının kendi kuyruğu: yavaş disk yazımı diğer aktarımları ve mDNS'i bloklamaz.
+    private let q = DispatchQueue(label: "qs.rx", qos: .userInitiated)
+    private var idle: DispatchSourceTimer?
+    private var lastData = Date()
     private var buf = Data()
     private var fh: FileHandle?
     private var path: URL?
@@ -56,19 +84,28 @@ final class Receiver {
     init(_ c: NWConnection) { self.c = c }
 
     func start() {
+        Activity.begin()
         c.stateUpdateHandler = { [self] s in
             switch s {
             case .failed, .cancelled: finish(false, reply: false)
             default: break
             }
         }
-        c.start(queue: Net.shared.q)
+        c.start(queue: q)
+        // 30 sn boyunca veri gelmezse (gönderen kapandı / Wi-Fi koptu) yarım dosya temizlenir, bağlantı bırakılır.
+        let t = DispatchSource.makeTimerSource(queue: q)
+        t.schedule(deadline: .now() + 5, repeating: 5)
+        t.setEventHandler { [self] in
+            if Date().timeIntervalSince(lastData) > 30 { finish(false, reply: false) }
+        }
+        t.resume()
+        idle = t
         readHead()
     }
 
     private func readHead() {
         c.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [self] d, _, eof, err in
-            if let d { buf.append(d) }
+            if let d { buf.append(d); lastData = Date() }
             if let r = buf.range(of: Data("\r\n\r\n".utf8)) {
                 let head = String(decoding: buf[..<r.lowerBound], as: UTF8.self)
                 let rest = Data(buf[r.upperBound...])
@@ -107,22 +144,32 @@ final class Receiver {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         // Aynı adlı dosya varsa üzerine yazılır; önce .part dosyasına yazılır, başarılı olunca yerine konur.
         let dest = dir.appendingPathComponent(clean)
-        let url = dir.appendingPathComponent(clean + ".part")
-        try? FileManager.default.removeItem(at: url)
+        // Aynı adlı iki aktarım birbirinin yarım dosyasını bozmasın diye .part adı benzersizdir.
+        let url = dir.appendingPathComponent(clean + "." + UUID().uuidString.prefix(8) + ".part")
+        if let free = try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            .volumeAvailableCapacityForImportantUsage, free < Int64(total) {
+            Store.shared.post(L("recv_partial"))
+            finish(false); return
+        }
         final = dest
         guard FileManager.default.createFile(atPath: url.path, contents: nil),
               let h = try? FileHandle(forWritingTo: url) else { finish(false); return }
         fh = h; path = url
 
         let first = rest.prefix(total)
-        if !first.isEmpty { try? h.write(contentsOf: first); got += first.count }
+        if !first.isEmpty {
+            do { try h.write(contentsOf: first) } catch { finish(false); return }
+            got += first.count
+        }
         if got >= total { finish(true) } else { readBody() }
     }
 
     private func readBody() {
         c.receive(minimumIncompleteLength: 1, maximumLength: min(1 << 20, total - got)) { [self] d, _, eof, err in
             if let d, !d.isEmpty {
-                try? fh?.write(contentsOf: d)
+                // Disk dolu / yazma hatasında sessizce "başarılı" demek yerine aktarımı başarısız say.
+                do { try fh?.write(contentsOf: d) } catch { finish(false); return }
+                lastData = Date()
                 got += d.count
                 let p = total > 0 ? got * 100 / total : 100
                 if p != lastPct { lastPct = p; Store.shared.post(L("receiving", name), Double(p)) }
@@ -136,6 +183,8 @@ final class Receiver {
     private func finish(_ ok: Bool, reply: Bool = true) {
         if finished { return }
         finished = true
+        idle?.cancel(); idle = nil
+        Activity.end()
         try? fh?.close()
         var ok = ok
         if let p = path {
@@ -159,6 +208,8 @@ final class Receiver {
 enum Sender {
     static func send(_ items: [URL], to p: Peer, done: @escaping (String) -> Void) {
         DispatchQueue.global().async {
+            Activity.begin()
+            defer { Activity.end() }
             var msg = L("sent")
             var ok = true
             var temps: [URL] = []

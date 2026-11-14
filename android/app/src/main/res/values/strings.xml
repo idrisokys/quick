@@ -29,6 +29,4 @@
     <string name="notif_recv_channel">Received files</string>
     <string name="notif_received">File received</string>
     <string name="notif_stop">Stop</string>
-    <string name="notif_online">Online: %1$s</string>
-    <string name="notif_more">Others (%1$d)</string>
 </resources>

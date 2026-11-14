@@ -49,13 +49,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Bildirimdeki cihaz butonu: dosya seçtirir, yalnızca o cihaza gönderir (arayüzsüz) -->
-        <activity
-            android:name=".PickActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:theme="@style/P" />
-
         <service
             android:name=".QsTile"
             android:exported="true"

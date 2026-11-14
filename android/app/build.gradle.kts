@@ -3,10 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 android {
-    namespace = "io.qs"
+    namespace = "io.github.idrisokys.quickshare"
     compileSdk = 34
     defaultConfig {
-        applicationId = "io.qs.share"
+        applicationId = "io.github.idrisokys.quickshare"
         minSdk = 29
         targetSdk = 34
         versionCode = 1
