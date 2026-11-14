@@ -71,6 +71,13 @@ final class Receiver {
     private let c: NWConnection
     /// Her bağlantının kendi kuyruğu: yavaş disk yazımı diğer aktarımları ve mDNS'i bloklamaz.
     private let q = DispatchQueue(label: "qs.rx", qos: .userInitiated)
+    /// Disk yazımı ayrı kuyrukta yapılır: yazma sürerken ağdan okuma durmaz (q üzerinde okunur, wq'da yazılır).
+    private let wq = DispatchQueue(label: "qs.rx.write", qos: .userInitiated)
+    private let maxInflight = 8          // yazma kuyruğunda bekleyebilecek en fazla parça (~8 MB)
+    private var inflight = 0             // yalnızca q üzerinde değişir
+    private var paused = false           // kuyruk dolunca okuma durur, yazma yetişince devam eder
+    private var recvDone = false         // tüm bayt ağdan alındı; yazmaların bitmesi bekleniyor
+    private var writeFailed = false      // yalnızca q üzerinde değişir
     private var idle: DispatchSourceTimer?
     private var lastData = Date()
     private var buf = Data()
@@ -164,17 +171,37 @@ final class Receiver {
     }
 
     private func readBody() {
-        c.receive(minimumIncompleteLength: 1, maximumLength: min(1 << 20, total - got)) { [self] d, _, eof, err in
+        let want = total - got
+        // En az 256 KB (ya da kalan kadar) birikince teslim al: parça ve yazma sayısı azalır, CPU yükü düşer.
+        c.receive(minimumIncompleteLength: min(1 << 18, want), maximumLength: min(1 << 20, want)) { [self] d, _, eof, err in
+            if finished { return }
             if let d, !d.isEmpty {
-                // Disk dolu / yazma hatasında sessizce "başarılı" demek yerine aktarımı başarısız say.
-                do { try fh?.write(contentsOf: d) } catch { finish(false); return }
                 lastData = Date()
                 got += d.count
                 let p = total > 0 ? got * 100 / total : 100
                 if p != lastPct { lastPct = p; Store.shared.post(L("receiving", name), Double(p)) }
+                inflight += 1
+                let h = fh
+                wq.async { [self] in
+                    var failed = false
+                    // Disk dolu / yazma hatasında sessizce "başarılı" demek yerine aktarımı başarısız say.
+                    do { try h?.write(contentsOf: d) } catch { failed = true }
+                    q.async { [self] in
+                        if finished { return }
+                        inflight -= 1
+                        lastData = Date()
+                        if failed { writeFailed = true; finish(false); return }
+                        if recvDone && inflight == 0 { finish(true); return }
+                        if paused && inflight < maxInflight / 2 { paused = false; readBody() }
+                    }
+                }
             }
-            if got >= total { finish(true) }
+            if got >= total {
+                recvDone = true
+                if inflight == 0 { finish(!writeFailed) }   // aksi halde son yazma bitince finish çağrılır
+            }
             else if err != nil || eof { finish(false) }
+            else if inflight >= maxInflight { paused = true }
             else { readBody() }
         }
     }
@@ -184,7 +211,8 @@ final class Receiver {
         finished = true
         idle?.cancel(); idle = nil
         Activity.end()
-        try? fh?.close()
+        // Kuyrukta bekleyen yazmalar bitmeden dosya kapatılmasın (wq, q'yu beklemediği için kilitlenme olmaz).
+        wq.sync { try? fh?.close() }
         var ok = ok
         if let p = path {
             if ok, let d = final {

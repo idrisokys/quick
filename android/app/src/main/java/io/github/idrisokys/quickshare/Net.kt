@@ -22,10 +22,17 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 private const val TYPE = "_qshare._tcp."
 private const val BUF = 1 shl 20
+/** Alıcıda ağ okuma ile disk yazmayı ayıran tampon havuzu: SLOTS × CH = 4 MB. */
+private const val CH = 512 * 1024
+private const val SLOTS = 8
+private class Chunk(val b: ByteArray, val n: Int)   // n < 0: bitti işareti
 
 /** Alınan dosyaların varsayılan konumu: <ana dizin>/Link */
 object SaveDir {
@@ -183,18 +190,43 @@ class Receiver(private val ctx: Context) {
                 var ok = false
                 try {
                     FileOutputStream(file).use { out ->
-                        val b = ByteArray(BUF)
+                        // Okuyucu (bu iş parçacığı) ağdan okur, yazıcı iş parçacığı diske yazar; yavaş depolama
+                        // (ör. TV) ağı bekletmez. Havuz boşalınca okuyucu doğal olarak yavaşlar (taşma yok).
+                        val free = ArrayBlockingQueue<ByteArray>(SLOTS).also { q -> repeat(SLOTS) { q.add(ByteArray(CH)) } }
+                        val full = ArrayBlockingQueue<Chunk>(SLOTS + 1)
+                        val werr = AtomicBoolean(false)
+                        val wr = thread(isDaemon = true, name = "qs-write") {
+                            while (true) {
+                                val c = try { full.take() } catch (e: InterruptedException) { break }
+                                if (c.n < 0) break
+                                // Hata olsa da kuyruk boşaltılmaya devam eder; okuyucu asılı kalmaz.
+                                if (!werr.get()) try { out.write(c.b, 0, c.n) } catch (e: Exception) { werr.set(true) }
+                                free.add(c.b)
+                            }
+                        }
                         var left = len
                         var last = -1
-                        while (left > 0) {
-                            val n = ins.read(b, 0, minOf(b.size.toLong(), left).toInt())
-                            if (n < 0) break
-                            out.write(b, 0, n)
-                            left -= n
-                            val p = ((len - left) * 100 / len).toInt()
-                            if (p != last) { last = p; Bus.progress(ctx.getString(R.string.receiving, clean), p) }
+                        try {
+                            while (left > 0 && !werr.get()) {
+                                val b = free.poll(30, TimeUnit.SECONDS) ?: break
+                                val want = minOf(CH.toLong(), left).toInt()
+                                var fill = 0
+                                while (fill < want) {
+                                    val n = ins.read(b, fill, want - fill)
+                                    if (n < 0) break
+                                    fill += n
+                                }
+                                if (fill > 0) full.put(Chunk(b, fill)) else free.add(b)
+                                left -= fill
+                                val p = ((len - left) * 100 / len).toInt()
+                                if (p != last) { last = p; Bus.progress(ctx.getString(R.string.receiving, clean), p) }
+                                if (fill < want) break
+                            }
+                        } finally {
+                            full.put(Chunk(ByteArray(0), -1))
+                            wr.join()   // bütün yazmalar bitmeden dosya kapanmaz / yeniden adlandırılmaz
                         }
-                        ok = left == 0L
+                        ok = left == 0L && !werr.get()
                     }
                 } finally {
                     if (ok) {

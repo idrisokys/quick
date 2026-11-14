@@ -1,6 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV afişi: telefondaki uygulama ikonuyla aynı (mavi degrade zemin + beyaz yukarı/aşağı oklar). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="320dp" android:height="180dp" android:viewportWidth="320" android:viewportHeight="180">
-    <path android:fillColor="#111111" android:pathData="M0,0h320v180h-320z" />
-    <path android:fillColor="#4FC3F7" android:pathData="M160,30L120,70h20v50h40v-50h20z" />
-    <path android:fillColor="#4FC3F7" android:pathData="M120,135h80v8h-80z" />
+    <path android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="160" android:startY="0" android:endX="160" android:endY="180">
+                <item android:offset="0" android:color="#FF48B7F2" />
+                <item android:offset="1" android:color="#FF1C6CC6" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- ic_launcher_fg.xml'deki oklar (108x108 alan) afişin ortasına büyütülerek yerleştirildi -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="2.6" android:scaleY="2.6"
+        android:translateX="106" android:translateY="36">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M40.52,29.58 L51.52,42.78 L44.38,42.78 L44.38,74.68 L36.67,74.68 L36.67,42.78 L29.52,42.78 z M67.36,78.42 L78.47,65.22 L71.22,65.22 L71.22,33.32 L63.52,33.32 L63.52,65.22 L56.37,65.22 z" />
+    </group>
 </vector>

@@ -4,6 +4,7 @@
     <string name="notif_channel">Bekleme</string>
     <string name="notif_title">Gönderi bekleniyor</string>
     <string name="select_file">Dosya seç</string>
+    <string name="close">Kapat</string>
     <string name="searching">Yakındaki cihazlar aranıyor…</string>
     <string name="hint">Dosya göndermek için bir cihaza dokun</string>
     <string name="device_default">Cihaz</string>

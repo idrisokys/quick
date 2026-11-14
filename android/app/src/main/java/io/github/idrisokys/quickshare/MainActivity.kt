@@ -132,8 +132,8 @@ class MainActivity : Activity() {
         root.addView(bar)
 
         val btn = Button(this).apply {
-            setText(R.string.select_file)
-            setOnClickListener { target = null; pickFiles() }
+            setText(R.string.close)
+            setOnClickListener { finishAndRemoveTask() }
         }
         val folderBtn = Button(this).apply {
             setText(R.string.open_folder)
