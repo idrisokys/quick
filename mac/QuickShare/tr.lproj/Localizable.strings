@@ -21,3 +21,7 @@
 "zipping" = "Sıkıştırılıyor: %@";
 "sent_to" = "%@ cihazına gönderildi";
 "err_zip" = "Klasör sıkıştırılamadı";
+"save_location" = "Kayıt yeri: %@ (değiştirmek için tıkla)";
+"save_location_set" = "Kayıt yeri: %@";
+"choose" = "Seç";
+"choose_folder_msg" = "Alınan dosyaların kaydedileceği klasörü seç";

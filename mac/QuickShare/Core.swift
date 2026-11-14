@@ -49,6 +49,21 @@ final class Store: ObservableObject {
         DispatchQueue.main.async { self.status = s; self.pct = p; self.savedURL = saved }
     }
 
+    /// Gelen dosyaların kaydedileceği klasör (varsayılan: ~/Link). Kullanıcı seçerse UserDefaults'ta saklanır.
+    static var defaultSaveDir: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Link")
+    }
+
+    static var saveDir: URL {
+        get {
+            if let p = UserDefaults.standard.string(forKey: "saveDir"), !p.isEmpty {
+                return URL(fileURLWithPath: p, isDirectory: true)
+            }
+            return defaultSaveDir
+        }
+        set { UserDefaults.standard.set(newValue.path, forKey: "saveDir") }
+    }
+
     var rows: [Row] {
         peers.values.sorted { $0.name < $1.name }.map { Row(id: $0.id, name: $0.name) }
     }

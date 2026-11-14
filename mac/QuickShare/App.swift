@@ -125,6 +125,24 @@ extension Store {
         }
     }
 
+    /// Gelen dosyaların kaydedileceği klasörü seçtirir.
+    func pickSaveFolder() {
+        let p = NSOpenPanel()
+        p.canChooseFiles = false
+        p.canChooseDirectories = true
+        p.canCreateDirectories = true
+        p.allowsMultipleSelection = false
+        p.directoryURL = Store.saveDir
+        p.prompt = L("choose")
+        p.message = L("choose_folder_msg")
+        NSApp.activate(ignoringOtherApps: true)
+        p.begin { r in
+            guard r == .OK, let u = p.url else { return }
+            Store.saveDir = u
+            Store.shared.post(L("save_location_set", u.path))
+        }
+    }
+
     func pickFiles(to id: String? = nil) {
         let p = NSOpenPanel()
         p.allowsMultipleSelection = true
@@ -147,6 +165,9 @@ struct ContentView: View {
                 Text(Identity.name).font(.headline).lineLimit(1)
                 Spacer()
                 Circle().fill(Color.green).frame(width: 8, height: 8)
+                Button { s.pickSaveFolder() } label: { Image(systemName: "folder") }
+                    .buttonStyle(.plain)
+                    .help(L("save_location", Store.saveDir.path))
                 Button { showInfo.toggle() } label: { Image(systemName: "info.circle") }
                     .buttonStyle(.plain)
                     .help(L("info"))
@@ -235,7 +256,7 @@ struct InfoPanel: View {
                 Image(nsImage: img).resizable().scaledToFill()
                     .frame(width: 28, height: 28).clipShape(Circle())
             }
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("sislivadi@gmail.com").textSelection(.enabled)
                 Link("https://github.com/idrisokys/", destination: URL(string: "https://github.com/idrisokys/")!)
             }

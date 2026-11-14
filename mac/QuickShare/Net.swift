@@ -66,7 +66,7 @@ enum Activity {
     }
 }
 
-/// Gelen bağlantı: başlığı oku, dosyayı ~/Link içine yaz.
+/// Gelen bağlantı: başlığı oku, dosyayı seçili kayıt klasörüne yaz (varsayılan ~/Link).
 final class Receiver {
     private let c: NWConnection
     /// Her bağlantının kendi kuyruğu: yavaş disk yazımı diğer aktarımları ve mDNS'i bloklamaz.
@@ -139,8 +139,7 @@ final class Receiver {
         if clean.isEmpty { clean = "file" }
         name = clean
 
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Link")
+        let dir = Store.saveDir
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         // Aynı adlı dosya varsa üzerine yazılır; önce .part dosyasına yazılır, başarılı olunca yerine konur.
         let dest = dir.appendingPathComponent(clean)

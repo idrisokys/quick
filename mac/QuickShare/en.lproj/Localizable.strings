@@ -21,3 +21,7 @@
 "zipping" = "Compressing: %@";
 "sent_to" = "Sent to %@";
 "err_zip" = "Could not compress the folder";
+"save_location" = "Save location: %@ (click to change)";
+"save_location_set" = "Save location: %@";
+"choose" = "Choose";
+"choose_folder_msg" = "Choose the folder where received files will be saved";
