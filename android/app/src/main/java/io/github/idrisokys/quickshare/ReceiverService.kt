@@ -72,6 +72,16 @@ class ReceiverService : Service() {
             c.stopService(Intent(c, ReceiverService::class.java))
         }
 
+        /**
+         * "Kapat" düğmesi: dinlemeyi/gönderimi durdurur, bildirimi kaldırır ve işlemi tamamen sonlandırır.
+         * Servisin onDestroy'u (mDNS kaydını kaldırma, soket kapatma) çalışsın diye işlem kısa bir gecikmeyle öldürülür.
+         * "on" kapatıldığı için açılışta kendiliğinden başlamaz; uygulamayı ya da kutucuğu açınca yeniden başlar.
+         */
+        fun quit(c: Context) {
+            stop(c)
+            Handler(Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 400)
+        }
+
         fun channels(c: Context) {
             val nm = c.getSystemService(NotificationManager::class.java)
             nm.deleteNotificationChannel("qs")

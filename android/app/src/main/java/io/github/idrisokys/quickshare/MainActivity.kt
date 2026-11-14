@@ -133,7 +133,7 @@ class MainActivity : Activity() {
 
         val btn = Button(this).apply {
             setText(R.string.close)
-            setOnClickListener { finishAndRemoveTask() }
+            setOnClickListener { ReceiverService.quit(this@MainActivity); finishAndRemoveTask() }
         }
         val folderBtn = Button(this).apply {
             setText(R.string.open_folder)
